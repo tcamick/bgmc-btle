@@ -10,7 +10,16 @@
 #define ADAFRUITBLE_RDY 2     // This should be an interrupt pin, on Uno thats #2 or #3
 #define ADAFRUITBLE_RST 9
 
-Adafruit_BLE_UART BTLEserial = Adafruit_BLE_UART(ADAFRUITBLE_REQ, ADAFRUITBLE_RDY, ADAFRUITBLE_RST);
+Adafruit_BLE_UART uart = Adafruit_BLE_UART(ADAFRUITBLE_REQ, ADAFRUITBLE_RDY, ADAFRUITBLE_RST);
+
+unsigned long time = 0l;
+boolean connection = false;
+uint8_t btm = 65;
+uint8_t out = btm;
+uint8_t cap = 90;
+
+#define persec 30
+#define sendat (1000/persec)
 
 /**************************************************************************/
 /*!
@@ -55,11 +64,13 @@ void setup() {
 
   Serial.begin(9600);
   while(!Serial); // Leonardo/Micro should wait for serial init
-  Serial.println(F("Adafruit Bluefruit Low Energy nRF8001 Print echo demo"));
+  Serial.println(F("Adafruit Bluefruit Low Energy nRF8001"));
 
-  BTLEserial.setDeviceName("camick"); /* 7 characters max! */
+  uart.setDeviceName("Sooty's"); /* 7 characters max! */
 
-  BTLEserial.begin();
+  uart.setRXcallback(rxCallback);
+  uart.setACIcallback(aciCallback);
+  uart.begin();
   
   bgmc.attach(3); // attached to pin 9 I just do this with 1 Servo
  
@@ -75,12 +86,13 @@ aci_evt_opcode_t laststatus = ACI_EVT_DISCONNECTED;
 void loop() {
 
   bgmc.writeMicroseconds(bgmc_signal);
-  
+
+
   // Tell the nRF8001 to do whatever it should be working on.
-  BTLEserial.pollACI();
+  uart.pollACI();
 
   // Ask what is our current status
-  aci_evt_opcode_t status = BTLEserial.getState();
+  aci_evt_opcode_t status = uart.getState();
   // If the status changed....
   if (status != laststatus) {
     // print it out!
@@ -99,17 +111,22 @@ void loop() {
 
   if (status == ACI_EVT_CONNECTED) {
     // Lets see if there's any data for us!
-    if (BTLEserial.available()) {
-      Serial.print("* "); Serial.print(BTLEserial.available()); Serial.println(F(" bytes available from BTLE"));
-    }
-    // OK while we still have something to read, get a character and print it out
-    
-    if(BTLEserial.available()) {
-      char c = BTLEserial.read();
+    char c = 'c';
+
+    /********************************************
+     * Antiquated section of code. Try using callbacks
+     ********************************************
+    //if (uart.available()) {
+      Serial.print("* "); Serial.print(uart.available()); Serial.println(F(" bytes available from BTLE"));
+      c = uart.read();
+      Serial.print("=> " + c);
       value=bgmc_parse_input(c);
       bgmc_signal =  bgmc_map_signal(value);
     }
-
+     *******************************************
+     *End antiquated section of code
+     *******************************************/
+  
     // Next up, see if we have any data to get from the Serial console
 
     if (Serial.available()) {
@@ -125,7 +142,7 @@ void loop() {
       Serial.print(F("\n* Sending -> \"")); Serial.print((char *)sendbuffer); Serial.println("\"");
 
       // write the data
-      BTLEserial.write(sendbuffer, sendbuffersize);
+      uart.write(sendbuffer, sendbuffersize);
     }
   }
 
@@ -164,4 +181,3 @@ int bgmc_parse_input(char incoming_byte){
 int bgmc_map_signal(int value){
   return bgmc_signal = map(value, min_map, max_map, min_ms, max_ms);
 }
-
